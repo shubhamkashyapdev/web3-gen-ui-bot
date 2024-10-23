@@ -1,11 +1,14 @@
 "use server";
 
+import { HotelCarousel } from "@ai-rsc/components/llm-crypto/hotel-carousel";
+import { HotelCarouselSkeleton } from "@ai-rsc/components/llm-crypto/hotel-skeleton";
 import { BotCard, BotMessage } from "@ai-rsc/components/llm-crypto/message";
 import PlaceHolderUsers from "@ai-rsc/components/llm-crypto/placeholder-users";
 import { Price } from "@ai-rsc/components/llm-crypto/price";
 import { PriceSkeleton } from "@ai-rsc/components/llm-crypto/price-skeleton";
 import { Stats } from "@ai-rsc/components/llm-crypto/stats";
 import { StatsSkeleton } from "@ai-rsc/components/llm-crypto/stats-skeleton";
+import { UserSkeleton } from "@ai-rsc/components/llm-crypto/user-skeleton";
 import { env } from "@ai-rsc/env.mjs";
 import { IPlaceholderUser } from "@ai-rsc/types/global.types";
 import { openai } from "@ai-sdk/openai";
@@ -52,6 +55,7 @@ Messages inside [] means that it's a UI element or a user event. For example:
 - "[Price of BTC = 69000]" means that the interface of the cryptocurrency price of BTC is shown to the user.
 
 If the user want placeholder users, call the \`get_placeholder_users\` to show the users.
+IF the user say anything related to hotels, call the \`get_hotels\` to show the hotels.
 If the user wants the price, call \`get_crypto_price\` to show the price.
 If the user wants the market cap or other stats of a given cryptocurrency, call \`get_crypto_stats\` to show the stats.
 If the user wants a stock price, it is an impossible task, so you should respond that you are a demo and cannot do that.
@@ -237,7 +241,7 @@ export async function sendMessage(message: string): Promise<{
         generate: async function* () {
           yield (
             <BotCard>
-              <StatsSkeleton />
+              <UserSkeleton />
             </BotCard>
           );
 
@@ -247,7 +251,7 @@ export async function sendMessage(message: string): Promise<{
           const users = (await response.json()) as IPlaceholderUser[];
 
           if (!response.ok) {
-            return <BotMessage>Users not found!</BotMessage>;
+            return <BotMessage>Hotel not found!</BotMessage>;
           }
 
           await sleep(1000);
@@ -268,6 +272,39 @@ export async function sendMessage(message: string): Promise<{
           );
         },
       },
+      get_hotels: {
+        description: "Get the hotels",
+        parameters: z.object({
+          limit: z
+            .string()
+            .describe("The max number of users to return")
+            .optional(),
+        }),
+        generate: async function* () {
+          yield (
+            <BotCard>
+              <HotelCarouselSkeleton />
+            </BotCard>
+          );
+
+          await sleep(3000);
+
+          history.done([
+            ...history.get(),
+            {
+              role: "assistant",
+              name: "get_placeholder_users",
+              content: `[Placeholder Users]`,
+            },
+          ]);
+
+          return (
+            <BotCard>
+              <HotelCarousel />
+            </BotCard>
+          );
+        },
+      },
     },
     temperature: 0,
   });
@@ -281,7 +318,11 @@ export async function sendMessage(message: string): Promise<{
 // Define the AI state and UI state types
 export type AIState = Array<{
   id?: number;
-  name?: "get_crypto_price" | "get_crypto_stats" | "get_placeholder_users";
+  name?:
+    | "get_crypto_price"
+    | "get_crypto_stats"
+    | "get_placeholder_users"
+    | "get_hotels";
   role: "user" | "assistant" | "system";
   content: string;
 }>;
