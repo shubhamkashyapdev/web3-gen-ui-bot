@@ -1,18 +1,20 @@
-'use server';
+"use server";
 
-import { BotCard, BotMessage } from '@ai-rsc/components/llm-crypto/message';
-import { Price } from '@ai-rsc/components/llm-crypto/price';
-import { PriceSkeleton } from '@ai-rsc/components/llm-crypto/price-skeleton';
-import { Stats } from '@ai-rsc/components/llm-crypto/stats';
-import { StatsSkeleton } from '@ai-rsc/components/llm-crypto/stats-skeleton';
-import { env } from '@ai-rsc/env.mjs';
-import { openai } from '@ai-sdk/openai';
-import type { CoreMessage, ToolInvocation } from 'ai';
-import { createAI, getMutableAIState, streamUI } from 'ai/rsc';
-import { MainClient } from 'binance';
-import { Loader2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { z } from 'zod';
+import { BotCard, BotMessage } from "@ai-rsc/components/llm-crypto/message";
+import PlaceHolderUsers from "@ai-rsc/components/llm-crypto/placeholder-users";
+import { Price } from "@ai-rsc/components/llm-crypto/price";
+import { PriceSkeleton } from "@ai-rsc/components/llm-crypto/price-skeleton";
+import { Stats } from "@ai-rsc/components/llm-crypto/stats";
+import { StatsSkeleton } from "@ai-rsc/components/llm-crypto/stats-skeleton";
+import { env } from "@ai-rsc/env.mjs";
+import { IPlaceholderUser } from "@ai-rsc/types/global.types";
+import { openai } from "@ai-sdk/openai";
+import type { CoreMessage, ToolInvocation } from "ai";
+import { createAI, getMutableAIState, streamUI } from "ai/rsc";
+import { MainClient } from "binance";
+import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { z } from "zod";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -42,13 +44,14 @@ const binance = new MainClient({
   !-- should respond that they are a demo and cannot do that. Besides that, the LLM can chat with users as normal.
 */
 
-
 const content = `\
 You are a crypto bot and you can help users get the prices of cryptocurrencies.
+You can also search for https://jsonplaceholder.typicode.com api like https://jsonplaceholder.typicode.com/users 
 
 Messages inside [] means that it's a UI element or a user event. For example:
 - "[Price of BTC = 69000]" means that the interface of the cryptocurrency price of BTC is shown to the user.
 
+If the user want placeholder users, call the \`get_placeholder_users\` to show the users.
 If the user wants the price, call \`get_crypto_price\` to show the price.
 If the user wants the market cap or other stats of a given cryptocurrency, call \`get_crypto_stats\` to show the stats.
 If the user wants a stock price, it is an impossible task, so you should respond that you are a demo and cannot do that.
@@ -58,28 +61,27 @@ Besides getting prices of cryptocurrencies, you can also chat with users.
 `;
 
 export async function sendMessage(message: string): Promise<{
-  id: number,
-  role: 'user' | 'assistant',
+  id: number;
+  role: "user" | "assistant";
   display: ReactNode;
 }> {
-
   const history = getMutableAIState<typeof AI>();
 
   history.update([
     ...history.get(),
     {
-      role: 'user',
+      role: "user",
       content: message,
     },
   ]);
 
   const reply = await streamUI({
-    model: openai('gpt-4o-2024-05-13'),
+    model: openai("gpt-4o-2024-05-13"),
     messages: [
       {
-        role: 'system',
+        role: "system",
         content,
-        toolInvocations: []
+        toolInvocations: [],
       },
       ...history.get(),
     ] as CoreMessage[],
@@ -89,7 +91,8 @@ export async function sendMessage(message: string): Promise<{
       </BotMessage>
     ),
     text: ({ content, done }) => {
-      if (done) history.done([...history.get(), { role: 'assistant', content }]);
+      if (done)
+        history.done([...history.get(), { role: "assistant", content }]);
 
       return <BotMessage>{content}</BotMessage>;
     },
@@ -100,16 +103,20 @@ export async function sendMessage(message: string): Promise<{
         parameters: z.object({
           symbol: z
             .string()
-            .describe("The name or symbol of the cryptocurrency. e.g. BTC/ETH/SOL.")
+            .describe(
+              "The name or symbol of the cryptocurrency. e.g. BTC/ETH/SOL."
+            ),
         }),
-        generate: async function* ({ symbol }: { symbol: string; }) {
+        generate: async function* ({ symbol }: { symbol: string }) {
           yield (
             <BotCard>
               <PriceSkeleton />
             </BotCard>
           );
 
-          const stats = await binance.get24hrChangeStatististics({ symbol: `${symbol}USDT` });
+          const stats = await binance.get24hrChangeStatististics({
+            symbol: `${symbol}USDT`,
+          });
           // get the last price
           const price = Number(stats.lastPrice);
           // extract the delta
@@ -120,8 +127,8 @@ export async function sendMessage(message: string): Promise<{
           history.done([
             ...history.get(),
             {
-              role: 'assistant',
-              name: 'get_crypto_price',
+              role: "assistant",
+              name: "get_crypto_price",
               content: `[Price of ${symbol} = ${price}]`,
             },
           ]);
@@ -139,16 +146,20 @@ export async function sendMessage(message: string): Promise<{
         parameters: z.object({
           slug: z
             .string()
-            .describe("The full name of the cryptocurrency in lowercase. e.g. bitcoin/ethereum/solana.")
+            .describe(
+              "The full name of the cryptocurrency in lowercase. e.g. bitcoin/ethereum/solana."
+            ),
         }),
-        generate: async function* ({ slug }: { slug: string; }) {
+        generate: async function* ({ slug }: { slug: string }) {
           yield (
             <BotCard>
               <StatsSkeleton />
             </BotCard>
           );
 
-          const url = new URL("https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail");
+          const url = new URL(
+            "https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail"
+          );
 
           // set the query params which are required
           url.searchParams.append("slug", slug);
@@ -161,14 +172,14 @@ export async function sendMessage(message: string): Promise<{
               Accept: "application/json",
               "Content-Type": "application/json",
               "X-CMC_PRO_API_KEY": env.CMC_API_KEY,
-            }
+            },
           });
 
           if (!response.ok) {
             return <BotMessage>Crypto not found!</BotMessage>;
           }
 
-          const res = await response.json() as {
+          const res = (await response.json()) as {
             data: {
               id: number;
               name: string;
@@ -180,7 +191,7 @@ export async function sendMessage(message: string): Promise<{
                 totalSupply: number;
                 marketCap: number;
                 marketCapDominance: number;
-              },
+              };
             };
           };
 
@@ -202,8 +213,8 @@ export async function sendMessage(message: string): Promise<{
           history.done([
             ...history.get(),
             {
-              role: 'assistant',
-              name: 'get_crypto_price',
+              role: "assistant",
+              name: "get_crypto_price",
               content: `[Stats of ${data.symbol}]`,
             },
           ]);
@@ -214,28 +225,70 @@ export async function sendMessage(message: string): Promise<{
             </BotCard>
           );
         },
-      }
+      },
+      get_placeholder_users: {
+        description: "Get the placeholder users.",
+        parameters: z.object({
+          limit: z
+            .string()
+            .describe("The max number of users to return")
+            .optional(),
+        }),
+        generate: async function* () {
+          yield (
+            <BotCard>
+              <StatsSkeleton />
+            </BotCard>
+          );
+
+          const response = await fetch(
+            `https://jsonplaceholder.typicode.com/users`
+          );
+          const users = (await response.json()) as IPlaceholderUser[];
+
+          if (!response.ok) {
+            return <BotMessage>Users not found!</BotMessage>;
+          }
+
+          await sleep(1000);
+
+          history.done([
+            ...history.get(),
+            {
+              role: "assistant",
+              name: "get_placeholder_users",
+              content: `[Placeholder Users]`,
+            },
+          ]);
+
+          return (
+            <BotCard>
+              <PlaceHolderUsers users={users} />
+            </BotCard>
+          );
+        },
+      },
     },
     temperature: 0,
   });
 
   return {
     id: Date.now(),
-    role: 'assistant' as const,
+    role: "assistant" as const,
     display: reply.value,
   };
-};
+}
 // Define the AI state and UI state types
 export type AIState = Array<{
   id?: number;
-  name?: 'get_crypto_price' | 'get_crypto_stats';
-  role: 'user' | 'assistant' | 'system';
+  name?: "get_crypto_price" | "get_crypto_stats" | "get_placeholder_users";
+  role: "user" | "assistant" | "system";
   content: string;
 }>;
 
 export type UIState = Array<{
   id: number;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   display: ReactNode;
   toolInvocations?: ToolInvocation[];
 }>;
